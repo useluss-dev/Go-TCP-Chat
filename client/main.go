@@ -1,7 +1,16 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+
+	tea "charm.land/bubbletea/v2"
+)
 
 func main() {
-	fmt.Println("Hello, from client")
+	p := tea.NewProgram(initialModel())
+	if _, err := p.Run(); err != nil {
+		fmt.Println("error:", err)
+		os.Exit(1)
+	}
 }
