@@ -1,4 +1,4 @@
-module github.com/useluss-dev/Go-TCP-Chat/client
+module chat-client
 
 go 1.27.3
 
