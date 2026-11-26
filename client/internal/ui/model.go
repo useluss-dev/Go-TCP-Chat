@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -19,12 +21,21 @@ type model struct {
 func New(c *chat.Conn) model {
 	ti := textinput.New()
 	ti.Placeholder = "/N <nickname>"
-	ti.SetVirtualCursor(false)
+	ti.SetVirtualCursor(true)
 	ti.Focus()
 
-	return model{input: ti, conn: c}
+	return model{input: ti, conn: c, viewport: viewport.New()}
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, readLine(m.conn))
+}
+
+func (m *model) addMessage(text string) {
+	atBottom := m.viewport.AtBottom()
+	m.messages = append(m.messages, text)
+	m.viewport.SetContent(strings.Join(m.messages, "\n"))
+	if atBottom {
+		m.viewport.GotoBottom()
+	}
 }

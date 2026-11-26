@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -31,7 +32,7 @@ func (c *Conn) ReadLine() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return line, nil
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 func (c *Conn) Close() error {

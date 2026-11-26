@@ -15,6 +15,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+	case incomingMsg:
+		m.addMessage(string(msg))
+		return m, readLine(m.conn) // wait for the next line
+
+	case errMsg:
+		m.addMessage("* " + msg.Error())
+		return m, nil // no readLine, so the loop stops
 	}
 	return m, nil
 }
@@ -26,19 +33,14 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c", "esc":
 		return m, tea.Quit
 	case "enter":
-		text := strings.TrimSpace(m.input.Value())
-		if text == "" {
+		line := strings.TrimSpace(m.input.Value())
+		if line == "" {
 			return m, nil
 		}
 		m.input.Reset()
 
-		wasAtBottom := m.viewport.AtBottom()
-		m.messages = append(m.messages, text)
-		m.viewport.SetContent(strings.Join(m.messages, "\n"))
-		if wasAtBottom {
-			m.viewport.GotoBottom()
-		}
-		return m, nil
+		m.addMessage(line)
+		return m, send(m.conn, line)
 	case "up", "down", "pgup", "pgdown":
 		m.viewport, cmd = m.viewport.Update(msg)
 		return m, cmd
