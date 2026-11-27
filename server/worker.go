@@ -15,12 +15,13 @@ var (
 
 const defaultGroup = "default"
 
+// Worker represents a connected client
 type Worker struct {
-	conn   net.Conn
-	man    *Manager
-	out    chan string
-	nick   string
-	groups map[string][]string
+	conn   net.Conn            // The workers connection
+	man    *Manager            // Reference to the manager
+	out    chan string         // Output channel
+	nick   string              // The current nickname
+	groups map[string][]string // The map of groups
 }
 
 func NewWorker(conn net.Conn, man *Manager) *Worker {
@@ -32,6 +33,7 @@ func NewWorker(conn net.Conn, man *Manager) *Worker {
 	}
 }
 
+// Runs the worker an initializes their writeLoop
 func (w *Worker) Run() {
 	writerDone := make(chan struct{})
 	go w.writeLoop(writerDone)
@@ -58,6 +60,8 @@ func (w *Worker) Run() {
 	}
 }
 
+// Delivers the given text to their out channel. Meant for delivering text
+// sent by other clients.
 func (w *Worker) Deliver(text string) {
 	select {
 	case w.out <- text:
@@ -66,6 +70,8 @@ func (w *Worker) Deliver(text string) {
 	}
 }
 
+// Writes queued lines to the client until w.out is closed, and keeps
+// draining after a write failure so senders never block.
 func (w *Worker) writeLoop(done chan<- struct{}) {
 	defer close(done)
 	failed := false
@@ -81,10 +87,12 @@ func (w *Worker) writeLoop(done chan<- struct{}) {
 	}
 }
 
+// Allows the worker to tell itself something. Meant for error messages.
 func (w *Worker) tell(text string) {
 	w.out <- text
 }
 
+// Breaks down an inputted line and runs commands if the command exists.
 func (w *Worker) handleLine(line string) {
 	log.Printf("%s", strings.TrimRight(line, "\r\n"))
 
@@ -119,6 +127,7 @@ func (w *Worker) handleLine(line string) {
 	}
 }
 
+// /L : lists nicknames of all users
 func (w *Worker) cmdList() {
 	nicks := w.man.ListNicks()
 	if len(nicks) == 0 {
@@ -128,6 +137,7 @@ func (w *Worker) cmdList() {
 	w.tell("online:\n" + strings.Join(nicks, "\n"))
 }
 
+// /N <nickname> : sets your nickname
 func (w *Worker) cmdNick(args []string) {
 	if len(args) == 0 {
 		w.tell("usage: /N <nickname>")
@@ -154,6 +164,7 @@ func (w *Worker) cmdNick(args []string) {
 	}
 }
 
+// /M <name[,name...]> <message> : sends a given message to the listed nicknames
 func (w *Worker) cmdMessage(args []string) {
 	if len(args) < 2 {
 		w.tell("usage: /M <name[,name...]> <message>")
@@ -162,6 +173,7 @@ func (w *Worker) cmdMessage(args []string) {
 	w.sendTo(w.expand(splitNames(args[0])), strings.Join(args[1:], " "))
 }
 
+// /B <message> : broadcasts message to all users in the default group
 func (w *Worker) cmdBroadcast(args []string) {
 	if len(args) == 0 {
 		w.tell("usage: /B <message>")
@@ -170,6 +182,7 @@ func (w *Worker) cmdBroadcast(args []string) {
 	w.sendTo(w.groups[defaultGroup], strings.Join(args, " "))
 }
 
+// /D <name[,name...]> : sets default group to the list of names
 func (w *Worker) cmdDefault(args []string) {
 	if len(args) == 0 {
 		w.tell("usage: /D <name[,name...]>")
@@ -184,9 +197,10 @@ func (w *Worker) cmdDefault(args []string) {
 	w.tell("default group: " + strings.Join(nicks, ","))
 }
 
+// /G <group_name> <name[,name...]> : sets a group to the list of names provided
 func (w *Worker) cmdGroup(args []string) {
 	if len(args) < 2 {
-		w.tell("usage: /G <Group> <name[,name...]>")
+		w.tell("usage: /G <group_name> <name[,name...]>")
 		return
 	}
 	group := args[0]
@@ -203,11 +217,19 @@ func (w *Worker) cmdGroup(args []string) {
 	w.tell("group " + group + ": " + strings.Join(nicks, ","))
 }
 
+// Attempts sending message to the listed nicknames and outputs a message based on result
 func (w *Worker) sendTo(nicks []string, text string) {
-	w.man.Send(w, nicks, text)
-	w.tell("message sent")
+	switch w.man.Send(w, nicks, text) {
+	case SuccessfulSend:
+		w.tell("message sent")
+	case PartialSend:
+		w.tell("message partially sent. some groups or nicknames you entered may not exist")
+	case FailedSend:
+		w.tell("message failed to send try again")
+	}
 }
 
+// Takes a list of names and expands group names into the names it makes up
 func (w *Worker) expand(names []string) []string {
 	var result []string
 	seen := make(map[string]bool)
@@ -238,6 +260,8 @@ func (w *Worker) resolve(names []string) (nicks []string, invalid string, ok boo
 	return w.expand(names), "", true
 }
 
+// Normalizes a command to be only the first 2 characters.
+// i.e. /msg -> /M, /Message -> /M
 func normalize(command string) string {
 	r := []rune(command)
 	if len(r) > 2 {
@@ -246,6 +270,7 @@ func normalize(command string) string {
 	return strings.ToUpper(string(r))
 }
 
+// Splits string list of names into an actual list
 func splitNames(names string) []string {
 	var out []string
 	for s := range strings.SplitSeq(names, ",") {

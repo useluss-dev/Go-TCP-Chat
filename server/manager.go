@@ -17,6 +17,16 @@ const (
 	NickTaken                      // someone else owns the nickname
 )
 
+// SendResult describes the outcome of a send
+type SendResult int
+
+const (
+	SuccessfulSend SendResult = iota // Message successfully sent to all named clients
+	PartialSend                      // Message was only able to be sent to some clients
+	FailedSend                       // Message failed to send to any client
+)
+
+// Manager keeps track of clients and manages their shared data (nicknames)
 type Manager struct {
 	mu       sync.Mutex
 	byNick   map[string]*Worker
@@ -30,6 +40,7 @@ func NewManager() *Manager {
 	}
 }
 
+// Tries to set the clients nickname returns SetResult based on what happened
 func (m *Manager) SetNick(w *Worker, nick string) SetResult {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -56,16 +67,22 @@ func (m *Manager) SetNick(w *Worker, nick string) SetResult {
 	return NickNew
 }
 
-func (m *Manager) Send(from *Worker, nicks []string, text string) bool {
+// Sends the workers message to the clients named if they exist. Returns SendResult
+// based on how many messages were successfully sent.
+func (m *Manager) Send(from *Worker, nicks []string, text string) SendResult {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	fromNick, ok := m.byWorker[from]
 	if !ok {
-		return false
+		return FailedSend
 	}
 	msg := fmt.Sprintf("[%s] %s", fromNick, text)
 
+	// The number of messages successfully sent
+	num_sent := 0
+
+	// Only send message to each client only once, even if they were named more
 	seen := make(map[string]bool, len(nicks))
 	for _, nick := range nicks {
 		if seen[nick] {
@@ -73,12 +90,24 @@ func (m *Manager) Send(from *Worker, nicks []string, text string) bool {
 		}
 		seen[nick] = true
 		if target, ok := m.byNick[nick]; ok {
+			num_sent++
 			target.Deliver(msg)
 		}
 	}
-	return true
+
+	// Message wasn't sent to any clients
+	if num_sent == 0 {
+		return FailedSend
+	}
+
+	if num_sent < len(nicks) {
+		return PartialSend
+	}
+
+	return SuccessfulSend
 }
 
+// Returns a sorted list of all the nicknames
 func (m *Manager) ListNicks() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -91,6 +120,7 @@ func (m *Manager) ListNicks() []string {
 	return nicks
 }
 
+// Removes a worker and releases their nickname
 func (m *Manager) Remove(w *Worker) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
