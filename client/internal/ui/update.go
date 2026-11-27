@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"errors"
+	"io"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -16,12 +18,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
 	case incomingMsg:
-		m.addMessage(string(msg))
+		m.receive(string(msg))
 		return m, readLine(m.conn) // wait for the next line
 
 	case errMsg:
-		m.addMessage("* " + msg.Error())
-		return m, nil // no readLine, so the loop stops
+		if errors.Is(msg, io.EOF) {
+			m.addMessage(kindSystem, "server closed the connection")
+		} else {
+			m.addMessage(kindSystem, "* "+msg.Error())
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -38,8 +44,7 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.input.Reset()
-
-		m.addMessage(line)
+		m.addMessage(kindSent, "> "+line)
 		return m, send(m.conn, line)
 	case "up", "down", "pgup", "pgdown":
 		m.viewport, cmd = m.viewport.Update(msg)
@@ -52,6 +57,8 @@ func (m model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) layout() {
+	wasAtBottom := m.viewport.AtBottom()
+
 	// input and message box heights
 	ih := inputBox.GetVerticalFrameSize() + 1
 	mh := max(0, m.height-ih)
@@ -68,4 +75,8 @@ func (m *model) layout() {
 
 	m.viewport.SetWidth(m.width - messageBox.GetHorizontalFrameSize())
 	m.viewport.SetHeight(max(0, mh-messageBox.GetVerticalFrameSize()))
+
+	if wasAtBottom {
+		m.viewport.GotoBottom()
+	}
 }

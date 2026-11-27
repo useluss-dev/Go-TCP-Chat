@@ -20,7 +20,6 @@ func readLine(c *chat.Conn) tea.Cmd {
 	}
 }
 
-// message.go
 func send(c *chat.Conn, line string) tea.Cmd {
 	return func() tea.Msg {
 		if err := c.Send(line); err != nil {

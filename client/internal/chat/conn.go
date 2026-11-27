@@ -38,3 +38,7 @@ func (c *Conn) ReadLine() (string, error) {
 func (c *Conn) Close() error {
 	return c.conn.Close()
 }
+
+func (c *Conn) RemoteAddr() string {
+	return c.conn.RemoteAddr().String()
+}
