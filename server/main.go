@@ -12,10 +12,12 @@ func main() {
 	}
 	defer listener.Close()
 	log.Println("Server running on :6666")
-	serve(listener)
+
+	man := NewManager()
+	serve(listener, man)
 }
 
-func serve(ln net.Listener) {
+func serve(ln net.Listener, man *Manager) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -24,22 +26,7 @@ func serve(ln net.Listener) {
 		}
 		log.Println("Accepted connection from:", conn.RemoteAddr())
 
-		w := NewWorker(conn)
+		w := NewWorker(conn, man)
 		go w.Run()
-	}
-}
-
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	buffer := make([]byte, 1024)
-	for {
-		n, err := conn.Read(buffer)
-		if err != nil {
-			log.Println("Error reading:", err)
-			return
-		}
-		log.Printf("Recieved: %s", buffer[:n])
-		conn.Write([]byte("Message received\n"))
 	}
 }
