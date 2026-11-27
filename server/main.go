@@ -23,7 +23,9 @@ func serve(ln net.Listener) {
 			continue
 		}
 		log.Println("Accepted connection from:", conn.RemoteAddr())
-		go handleConnection(conn)
+
+		w := NewWorker(conn)
+		go w.Run()
 	}
 }
 
